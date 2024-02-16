@@ -8,6 +8,8 @@ const jwt = require('jsonwebtoken');
 require("dotenv").config();
 const SecretKey = process.env.MY_SECRET_KEY;
 
+const {authenticateJwt} = require('../middleware/auth');
+
 const signupSchema = z.object({
     username: z.string().email(),  
     firstName: z.string().max(30), 
@@ -20,7 +22,7 @@ const signupSchema = z.object({
 
 router.post('/signup', async (req, res) => {
     const userName = req.body.username;
-    const user = await User.findOne({ username: userName }); // Corrected this line
+    const user = await User.findOne({ username: userName }); 
     if (user) {
         return res.status(403).json({ message: 'User already exists' });
     } 
@@ -52,4 +54,69 @@ router.post('/signup', async (req, res) => {
     }
 });
 
+router.post("/signin", async (req, res) => {
+    const { username, password } = req.body;
+  
+    const user = await User.findOne({ username });
+  
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+  
+    if (!isPasswordValid) {
+      return res.status(401).json({ message: "Invalid password" });
+    }
+  
+    if (!user) {
+      return res.status(411).json({
+        message: "User doesn't exist! Please Signup.",
+      });
+    }
+  
+    try {
+      const userId = user._id;
+      const token = jwt.sign({ user, userId }, SecretKey);
+  
+      return res.json({
+        token,
+      });
+    } catch (error) {
+      return res.status(411).json({
+        message: "Error while logging in!",
+      });
+    }
+  });
+
+//   router.put("/", authenticateJwt, async (req, res) => {
+//     const { password, firstName, lastName } = req.body;
+//     await User.updateOne({ _id: req.userId }, password, firstName, lastName);
+	
+//     res.json({
+//         message: "Updated successfully"
+//     })
+// })
+
+const updateBody = z.object({
+	password: z.string().optional(),
+    firstName: z.string().optional(),
+    lastName: z.string().optional(),
+})
+
+router.put("/", authenticateJwt, async (req, res) => {
+    const { success } = updateBody.safeParse(req.body)
+    if (!success) {
+        res.status(411).json({
+            message: "Error while updating information"
+        })
+    }
+
+        const u =  await User.findByIdAndUpdate(req.user.userId , req.body);
+        if (u) {
+            res.json({ message: 'Updated successfully' });
+          } else {
+            res.status(404).json({ message: 'user not found' });
+          }
+        });
+
+
+  
+  
 module.exports = router;
